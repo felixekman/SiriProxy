@@ -55,9 +55,15 @@ class SiriProxy::Connection < EventMachine::Connection
       self.consumed_ace = true;
     end
     
-    process_compressed_data()
-    
-    flush_output_buffer()
+    begin
+      process_compressed_data()
+  
+      flush_output_buffer()
+    rescue
+      puts "[Info - #{self.name}] Got invalid data (non-ACE protocol?), terminating the connection."
+
+      self.close_connection
+    end
   end
   
   def flush_output_buffer
@@ -169,6 +175,11 @@ class SiriProxy::Connection < EventMachine::Connection
   end
   
   def prep_received_object(object)
+    #workaround for #143
+    if object["class"] == "FinishSpeech" or object["class"] == "SpeechRecognized"
+      @block_rest_of_session = false
+    end
+    
     if object["refId"] == self.last_ref_id && @block_rest_of_session
       puts "[Info - Dropping Object from Guzzoni] #{object["class"]}" if $LOG_LEVEL > 1
       pp object if $LOG_LEVEL > 3
